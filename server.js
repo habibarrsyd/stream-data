@@ -81,13 +81,15 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    if (requestUrl.pathname === '/' || requestUrl.pathname === '/index.html') {
-        serveFile(res, path.join(rootDir, 'index.html'));
+    // Serve upload.html as the homepage (root) so the bot can land there
+    if (requestUrl.pathname === '/' || requestUrl.pathname === '/upload' || requestUrl.pathname === '/upload.html') {
+        serveFile(res, path.join(rootDir, 'upload.html'));
         return;
     }
 
-    if (requestUrl.pathname === '/upload' || requestUrl.pathname === '/upload.html') {
-        serveFile(res, path.join(rootDir, 'upload.html'));
+    // Keep dashboard accessible at /index.html explicitly
+    if (requestUrl.pathname === '/index.html') {
+        serveFile(res, path.join(rootDir, 'index.html'));
         return;
     }
 
