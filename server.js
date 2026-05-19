@@ -87,9 +87,9 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // Keep dashboard accessible at /index.html explicitly
-    if (requestUrl.pathname === '/index.html') {
-        serveFile(res, path.join(rootDir, 'index.html'));
+    // Keep dashboard accessible at /dashboard.html explicitly
+    if (requestUrl.pathname === '/dashboard.html') {
+        serveFile(res, path.join(rootDir, 'dashboard.html'));
         return;
     }
 
