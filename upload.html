@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot Feeder - Steam Radar</title>
+    <style>
+        body { background-color: #0d1117; color: white; font-family: sans-serif; padding: 40px; }
+        textarea { width: 100%; height: 300px; background: #161b22; color: #58a6ff; padding: 10px; margin-bottom: 15px; }
+        input { padding: 10px; margin-bottom: 15px; width: 200px; }
+        button { padding: 10px 20px; background: #034694; color: white; border: none; cursor: pointer; font-weight: bold;}
+    </style>
+</head>
+<body>
+    <h2>🤖 Secret Bot Feeder</h2>
+    <p>Paste JSON here to update database.</p>
+    
+    <textarea id="json-input" placeholder='{"last_update": "...", ...}'></textarea><br>
+    <button id="submit-btn" onclick="kirimKeDatabase()">Deploy to Database</button>
+    <p id="status-msg"></p>
+
+    <script src="/api/config.js"></script>
+    <script>
+        const runtimeConfig = window.APP_CONFIG || {};
+        const SUPABASE_URL = runtimeConfig.SUPABASE_URL;
+        const SUPABASE_ANON_KEY = runtimeConfig.SUPABASE_ANON_KEY;
+
+        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+            document.getElementById('status-msg').innerText = '❌ Config Supabase belum tersedia. Jalankan lewat server lokal yang membaca .env.';
+            document.getElementById('status-msg').style.color = 'red';
+        }
+
+        async function kirimKeDatabase() {
+            const rawText = document.getElementById('json-input').value;
+            const statusText = document.getElementById('status-msg');
+
+            try {
+                // Pastikan yang diinput bot adalah JSON beneran
+                const jsonData = JSON.parse(rawText);
+
+                statusText.innerText = '⏳ Mengirim ke Supabase...';
+                
+                // 2. Tembak ke API Supabase (Pakai PATCH buat ngupdate baris id=1)
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/steam_discounts?id=eq.1`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    },
+                    // Kita masukin JSON-nya ke dalam kolom raw_json di tabel lu
+                    body: JSON.stringify({ raw_json: jsonData }) 
+                });
+
+                if (!response.ok) throw new Error('Gagal nembak database');
+                
+                statusText.innerText = '✅ BERHASIL! Database terupdate.';
+                statusText.style.color = '#58a6ff';
+
+            } catch (error) {
+                statusText.innerText = '❌ Error: ' + error.message;
+                statusText.style.color = 'red';
+            }
+        }
+    </script>
+</body>
+</html>
