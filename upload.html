@@ -5,90 +5,115 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bot Feeder - Steam Radar</title>
     <style>
-        body { background-color: #0d1117; color: white; font-family: sans-serif; padding: 40px; }
-        textarea { width: 100%; height: 300px; background: #161b22; color: #58a6ff; padding: 10px; margin-bottom: 15px; }
-        input { padding: 10px; margin-bottom: 15px; width: 200px; }
-        button { padding: 10px 20px; background: #034694; color: white; border: none; cursor: pointer; font-weight: bold;}
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: #0d1117; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .container { width: 100%; max-width: 600px; background-color: #161b22; padding: 30px; border-radius: 12px; border: 1px solid #30363d; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        h2 { font-size: 22px; margin-bottom: 10px; color: #58a6ff; }
+        p { font-size: 14px; color: #8b949e; margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-size: 14px; color: #c9d1d9; font-weight: 500; }
+        textarea { width: 100%; height: 300px; background: #0d1117; color: #58a6ff; border: 1px solid #30363d; padding: 10px; margin-bottom: 15px; border-radius: 6px; font-family: monospace; font-size: 12px; }
+        input[type="password"] { width: 100%; padding: 10px; margin-bottom: 15px; background: #0d1117; border: 1px solid #30363d; color: white; border-radius: 6px; }
+        button { width: 100%; padding: 12px 20px; background: #034694; color: white; border: none; cursor: pointer; font-weight: bold; border-radius: 6px; font-size: 16px; transition: background 0.2s; }
+        button:hover { background: #0969da; }
+        #status-msg { margin-top: 15px; padding: 10px; border-radius: 6px; text-align: center; font-size: 14px; display: none; }
+        #status-msg.show { display: block; }
+        #status-msg.error { background-color: rgba(248, 81, 73, 0.2); color: #f85149; }
+        #status-msg.success { background-color: rgba(88, 166, 255, 0.2); color: #58a6ff; }
     </style>
 </head>
 <body>
-    <h2>🤖 Secret Bot Feeder</h2>
-    <p>Select a JSON file, or paste JSON as a fallback.</p>
-    
-    <input type="file" id="json-file" accept="application/json,.json"><br>
-    <textarea id="json-input" placeholder='{"last_update": "...", ...}'></textarea><br>
-    <button id="submit-btn" onclick="kirimKeDatabase()">Deploy to Database</button>
-    <p id="status-msg"></p>
+    <div class="container">
+        <h2>🤖 Bot Feeder</h2>
+        <p>Deploy JSON payload to Supabase database.</p>
+        
+        <label for="json-input">JSON Payload:</label>
+        <textarea id="json-input" placeholder='{"last_update": "2025-01-15", "pundit_analysis": "Analysis here. **Decision:** Action needed", "shortlisted_deals": "Game A, Game B"}'></textarea>
+        
+        <label for="pin-input">Security PIN:</label>
+        <input type="password" id="pin-input" placeholder="Enter PIN">
+        
+        <button id="submit-btn">Deploy to Database</button>
+        <p id="status-msg"></p>
+    </div>
 
     <script src="/api/config.js"></script>
     <script>
+        // Get config from environment variables (loaded from /api/config.js)
         const runtimeConfig = window.APP_CONFIG || {};
         const SUPABASE_URL = runtimeConfig.SUPABASE_URL;
         const SUPABASE_ANON_KEY = runtimeConfig.SUPABASE_ANON_KEY;
 
+        const CORRECT_PIN = '12345';
+
         if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-            document.getElementById('status-msg').innerText = '❌ Config Supabase belum tersedia. Jalankan lewat server lokal yang membaca .env.';
-            document.getElementById('status-msg').style.color = 'red';
+            document.getElementById('status-msg').innerText = '⚠️ Supabase config not available. Check .env configuration.';
+            document.getElementById('status-msg').classList.add('show', 'error');
+            throw new Error('Supabase config missing');
         }
 
-        async function getJsonText() {
-            const fileInput = document.getElementById('json-file');
-            const textInput = document.getElementById('json-input');
+        document.getElementById('submit-btn').addEventListener('click', deployToDatabase);
 
-            if (fileInput.files && fileInput.files[0]) {
-                return await fileInput.files[0].text();
-            }
-
-            return textInput.value;
-        }
-
-        function normalizePayload(parsedJson) {
-            if (parsedJson && typeof parsedJson === 'object' && !Array.isArray(parsedJson) && parsedJson.raw_json) {
-                return parsedJson.raw_json;
-            }
-
-            return parsedJson;
-        }
-
-        async function kirimKeDatabase() {
-            const statusText = document.getElementById('status-msg');
+        async function deployToDatabase() {
+            const statusMsg = document.getElementById('status-msg');
+            statusMsg.classList.remove('show', 'success', 'error');
 
             try {
-                const rawText = await getJsonText();
-
-                if (!rawText.trim()) {
-                    throw new Error('Pilih file JSON atau paste JSON dulu.');
+                // Step 1: Validate PIN
+                const pinInput = document.getElementById('pin-input').value;
+                if (pinInput !== CORRECT_PIN) {
+                    throw new Error('Incorrect PIN. Access denied.');
                 }
 
-                // Pastikan yang diinput bot adalah JSON beneran
-                const parsedJson = JSON.parse(rawText);
-                const jsonData = normalizePayload(parsedJson);
+                // Step 2: Get JSON from textarea
+                const jsonText = document.getElementById('json-input').value.trim();
+                if (!jsonText) {
+                    throw new Error('JSON payload is empty. Please paste valid JSON.');
+                }
 
-                statusText.innerText = '⏳ Mengirim ke Supabase...';
-                
-                // 2. Tembak ke API Supabase (Pakai PATCH buat ngupdate baris id=1)
-                const response = await fetch(`${SUPABASE_URL}/rest/v1/steam_discounts?id=eq.1`, {
+                // Step 3: Parse JSON
+                let parsedJson;
+                try {
+                    parsedJson = JSON.parse(jsonText);
+                } catch (e) {
+                    throw new Error('Invalid JSON format: ' + e.message);
+                }
+
+                // Step 4: Show loading status
+                statusMsg.innerText = '⏳ Deploying to database...';
+                statusMsg.classList.add('show', 'success');
+
+                // Step 5: Send PATCH request to Supabase
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/steam_discount?id=eq.1`, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
                         'apikey': SUPABASE_ANON_KEY,
                         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
                     },
-                    // Kita masukin JSON-nya ke dalam kolom raw_json di tabel lu
-                    body: JSON.stringify({ raw_json: jsonData }) 
+                    body: JSON.stringify({ raw_json: parsedJson })
                 });
 
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(errorText || `Gagal nembak database (${response.status})`);
+                    const errorData = await response.text();
+                    throw new Error(`Database update failed (${response.status}): ${errorData}`);
                 }
+
+                // Step 6: Show success message
+                statusMsg.innerText = '✅ Successfully deployed to database!';
+                statusMsg.classList.remove('error');
+                statusMsg.classList.add('success');
                 
-                statusText.innerText = '✅ BERHASIL! Database terupdate.';
-                statusText.style.color = '#58a6ff';
+                // Clear inputs
+                document.getElementById('json-input').value = '';
+                document.getElementById('pin-input').value = '';
 
             } catch (error) {
-                statusText.innerText = '❌ Error: ' + error.message;
-                statusText.style.color = 'red';
+                statusMsg.innerText = '❌ ' + error.message;
+                statusMsg.classList.remove('success');
+                statusMsg.classList.add('error');
+                console.error('Error:', error);
+            } finally {
+                statusMsg.classList.add('show');
             }
         }
     </script>

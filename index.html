@@ -44,11 +44,16 @@
 
     <script src="/api/config.js"></script>
     <script>
-        const runtimeConfig = window.APP_CONFIG || {};
-        const SUPABASE_URL = runtimeConfig.SUPABASE_URL;
-        const SUPABASE_ANON_KEY = runtimeConfig.SUPABASE_ANON_KEY;
+        // Placeholder constants for Supabase configuration
+        // In production, these should be injected from environment variables
+        const SUPABASE_URL = 'https://your-project.supabase.co';
+        const SUPABASE_ANON_KEY = 'your-anon-key-here';
 
-        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        const runtimeConfig = window.APP_CONFIG || {};
+        const finalSupabaseUrl = runtimeConfig.SUPABASE_URL || SUPABASE_URL;
+        const finalSupabaseKey = runtimeConfig.SUPABASE_ANON_KEY || SUPABASE_ANON_KEY;
+
+        if (!finalSupabaseUrl || !finalSupabaseKey) {
             document.getElementById('analysis-content').innerText = '⚠️ Config Supabase belum tersedia. Jalankan lewat server lokal yang membaca .env.';
             document.getElementById('games-content').innerHTML = '<li>Config missing.</li>';
             document.getElementById('decision-content').innerText = '⚠️ Config missing';
@@ -56,11 +61,11 @@
         }
 
         // Fungsi fetch data dari Supabase via REST API
-        fetch(`${SUPABASE_URL}/rest/v1/steam_discounts?select=raw_json&id=eq.1`, {
+        fetch(`${finalSupabaseUrl}/rest/v1/steam_discount?select=raw_json&id=eq.1`, {
             method: 'GET',
             headers: {
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                'apikey': finalSupabaseKey,
+                'Authorization': `Bearer ${finalSupabaseKey}`
             }
         })
         .then(response => {
@@ -71,31 +76,48 @@
             // Karena responsnya berupa Array, kita ambil baris pertama [0], lalu ambil raw_json-nya
             const dbData = data[0].raw_json;
 
+            if (!dbData) {
+                throw new Error('raw_json is empty');
+            }
+
             // 1. Tampilkan Waktu Update
-            document.getElementById('timestamp-display').innerText = "Last Update (WIB): " + dbData.last_update;
+            const lastUpdate = dbData.last_update || 'Unknown';
+            document.getElementById('timestamp-display').innerText = "Last Update (WIB): " + lastUpdate;
 
             // 2. Parsing Analisis AI (**)
-            let rawAnalysis = dbData.pundit_analysis;
-            let formattedAnalysis = rawAnalysis.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            let rawAnalysis = String(dbData.pundit_analysis || '');
+            // Remove escape characters dan normalize newlines
+            rawAnalysis = rawAnalysis.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+            // Convert \n to <br> untuk display
+            let formattedAnalysis = rawAnalysis
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n/g, '<br>');
             
-            const decisionSplit = formattedAnalysis.split(/Decision:/i);
-            document.getElementById('analysis-content').innerHTML = decisionSplit[0].trim();
+            const decisionSplit = formattedAnalysis.split(/<br>Decision:/i);
+            document.getElementById('analysis-content').innerHTML = decisionSplit[0].trim() || 'No analysis available';
 
-            // 3. Tampilkan Keputusan Akhir
+            // 3. Tampilkan Keputusan Akhir - hilangkan \n dan rapikan
             if (decisionSplit.length > 1) {
-                document.getElementById('decision-content').innerHTML = "🎯 TACTICAL DECISION: <br>" + decisionSplit[1].trim();
+                let decision = decisionSplit[1].trim().replace(/<br>/g, ' ');
+                document.getElementById('decision-content').innerHTML = "🎯 TACTICAL DECISION:<br>" + decision;
             } else {
-                document.getElementById('decision-content').innerHTML = "🎯 TACTICAL DECISION: <br> No specific decision written by AI.";
+                document.getElementById('decision-content').innerHTML = "🎯 TACTICAL DECISION:<br>No specific decision written by AI.";
             }
 
             // 4. Tampilkan Daftar Game Diskon
-            const gamesRaw = dbData.shortlisted_deals.split(',');
-            const gamesListHtml = gamesRaw.map(game => {
-                if(game.trim() !== "") {
-                    return `<li>🔵 <strong>${game.trim()}</strong></li>`;
-                }
-                return '';
-            }).join('');
+            let gamesListHtml = '';
+            
+            // Check if shortlisted_deals is object dengan discounted_games array
+            if (dbData.shortlisted_deals && typeof dbData.shortlisted_deals === 'object' && Array.isArray(dbData.shortlisted_deals.discounted_games)) {
+                gamesListHtml = dbData.shortlisted_deals.discounted_games
+                    .map(game => `<li>🔵 <strong>${game.game_title}</strong> | ${game.discount_percentage}</li>`)
+                    .join('');
+            } else if (typeof dbData.shortlisted_deals === 'string') {
+                // Fallback untuk format string comma-separated
+                const gamesRaw = dbData.shortlisted_deals.split(',').filter(game => game.trim() !== '');
+                gamesListHtml = gamesRaw.map(game => `<li>🔵 <strong>${game.trim()}</strong></li>`).join('');
+            }
+            
             document.getElementById('games-content').innerHTML = gamesListHtml || '<li>No hot deals found today.</li>';
             
         })
