@@ -13,8 +13,9 @@
 </head>
 <body>
     <h2>🤖 Secret Bot Feeder</h2>
-    <p>Paste JSON here to update database.</p>
+    <p>Select a JSON file, or paste JSON as a fallback.</p>
     
+    <input type="file" id="json-file" accept="application/json,.json"><br>
     <textarea id="json-input" placeholder='{"last_update": "...", ...}'></textarea><br>
     <button id="submit-btn" onclick="kirimKeDatabase()">Deploy to Database</button>
     <p id="status-msg"></p>
@@ -30,13 +31,38 @@
             document.getElementById('status-msg').style.color = 'red';
         }
 
+        async function getJsonText() {
+            const fileInput = document.getElementById('json-file');
+            const textInput = document.getElementById('json-input');
+
+            if (fileInput.files && fileInput.files[0]) {
+                return await fileInput.files[0].text();
+            }
+
+            return textInput.value;
+        }
+
+        function normalizePayload(parsedJson) {
+            if (parsedJson && typeof parsedJson === 'object' && !Array.isArray(parsedJson) && parsedJson.raw_json) {
+                return parsedJson.raw_json;
+            }
+
+            return parsedJson;
+        }
+
         async function kirimKeDatabase() {
-            const rawText = document.getElementById('json-input').value;
             const statusText = document.getElementById('status-msg');
 
             try {
+                const rawText = await getJsonText();
+
+                if (!rawText.trim()) {
+                    throw new Error('Pilih file JSON atau paste JSON dulu.');
+                }
+
                 // Pastikan yang diinput bot adalah JSON beneran
-                const jsonData = JSON.parse(rawText);
+                const parsedJson = JSON.parse(rawText);
+                const jsonData = normalizePayload(parsedJson);
 
                 statusText.innerText = '⏳ Mengirim ke Supabase...';
                 
@@ -52,7 +78,10 @@
                     body: JSON.stringify({ raw_json: jsonData }) 
                 });
 
-                if (!response.ok) throw new Error('Gagal nembak database');
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || `Gagal nembak database (${response.status})`);
+                }
                 
                 statusText.innerText = '✅ BERHASIL! Database terupdate.';
                 statusText.style.color = '#58a6ff';
