@@ -51,6 +51,23 @@
             throw new Error('Supabase config missing');
         }
 
+        // Helper: show desktop notification (requests permission if needed)
+        function showDesktopNotification(title, body) {
+            try {
+                if (!('Notification' in window)) return;
+
+                if (Notification.permission === 'granted') {
+                    new Notification(title, { body });
+                } else if (Notification.permission !== 'denied') {
+                    Notification.requestPermission().then(permission => {
+                        if (permission === 'granted') new Notification(title, { body });
+                    });
+                }
+            } catch (e) {
+                console.warn('Notification failed', e);
+            }
+        }
+
         document.getElementById('submit-btn').addEventListener('click', deployToDatabase);
 
         async function deployToDatabase() {
@@ -102,7 +119,10 @@
                 statusMsg.innerText = '✅ Successfully deployed to database!';
                 statusMsg.classList.remove('error');
                 statusMsg.classList.add('success');
-                
+
+                // Desktop notification
+                showDesktopNotification('Deploy Successful', 'Supabase row updated.');
+
                 // Clear inputs
                 document.getElementById('json-input').value = '';
                 document.getElementById('pin-input').value = '';
@@ -112,6 +132,9 @@
                 statusMsg.classList.remove('success');
                 statusMsg.classList.add('error');
                 console.error('Error:', error);
+
+                // Desktop notification for failure
+                showDesktopNotification('Deploy Failed', error.message);
             } finally {
                 statusMsg.classList.add('show');
             }
